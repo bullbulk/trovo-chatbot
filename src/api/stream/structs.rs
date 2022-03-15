@@ -39,7 +39,7 @@ pub enum ChatSocketMessage {
     },
 
     // Sent by trovo when a chat message is sent in chat.
-    // May contain mulptiple chat messages at a time.
+    // May contain multiple chat messages at a time.
     //
     // This is also sent on connection to a channel if there were recent chat messages.
     Chat {

@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 already_skipped = true;
                 println!("Skipped {} messages", skipped_messages);
             }
-        }
+        };
         println!("[{}] {{{}}} {}", Local::now(), msg.nick_name, msg.content);
     }
     Ok(())

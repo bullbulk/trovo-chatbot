@@ -10,7 +10,7 @@ use futures::prelude::*;
 use tokio::{
     select,
     sync::{mpsc, oneshot},
-    time,
+    time::sleep,
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, trace, warn};
@@ -18,6 +18,7 @@ use tracing::{debug, error, trace, warn};
 use crate::api::stream::errors::ChatConnectError;
 use crate::api::stream::errors::ChatMessageStreamError;
 use crate::api::stream::structs::{ChatMessage, ChatSocketMessage};
+use crate::utils::utils::random_string;
 
 const CHAT_MESSAGES_BUFFER: usize = 32;
 const DEFAULT_PING_INTERVAL: Duration = Duration::from_secs(30);
@@ -31,6 +32,7 @@ pub struct ChatMessageStream {
 
 impl ChatMessageStream {
     // Connect to trovo chat using the given chat token.
+    // FIXME: Sometimes connecting takes too much time and then crashes WebSocket(Protocol(HandshakeIncomplete))
     pub async fn connect(chat_token: String) -> Result<ChatMessageStream, ChatConnectError> {
         let cancellation_token = CancellationToken::new();
 
@@ -49,14 +51,13 @@ impl ChatMessageStream {
             auth_response_receiver
         ) = oneshot::channel();
 
-        let auth_nonce = "authenticate".to_string(); // TODO: random string
+        let auth_nonce = random_string(32).await;
 
         let reader = SocketMessagesReader {
             reader,
             cancellation_token: cancellation_token.clone(),
             auth: (auth_nonce.clone(), Some(auth_response_sender)),
             chat_messages_sender: chat_messages_sender.clone(),
-            socket_messages_sender,
             ping: Default::default(),
         };
         reader.spawn();
@@ -78,6 +79,12 @@ impl ChatMessageStream {
             chat_messages_sender,
         };
         writer.spawn();
+
+        let pinger = Pinger {
+            ping: Default::default(),
+            socket_messages_sender,
+        };
+        pinger.spawn();
 
         Ok(ChatMessageStream {
             cancellation_token,
@@ -135,11 +142,37 @@ impl Default for Ping {
     }
 }
 
+// TODO: Dynamic state provided by 'SocketMessagesReader::handle_socket_message'
+#[derive(Debug)]
+struct Pinger {
+    ping: Ping,
+    socket_messages_sender: mpsc::Sender<ChatSocketMessage>,
+}
+
+impl Pinger {
+    fn spawn(mut self) {
+        tokio::spawn(async move {
+            loop {
+                sleep(self.ping.interval).await;
+                println!("-------------Ping sent at {}-------------", Local::now());
+                self.ping.iteration += 1;
+
+                let msg = ChatSocketMessage::Ping { nonce: self.ping.iteration.to_string() };
+                trace!(?msg, "sending ping");
+                match self.socket_messages_sender.send(msg).await {
+                    Err(_) => panic!("Service unavailable: cannot send ping"),
+                    _ => {}
+                };
+            };
+        });
+    }
+}
+
+
 struct SocketMessagesReader<R> {
     cancellation_token: CancellationToken,
     reader: R,
     chat_messages_sender: mpsc::Sender<Result<ChatMessage, ChatMessageStreamError>>,
-    socket_messages_sender: mpsc::Sender<ChatSocketMessage>,
     auth: (
         String,
         Option<oneshot::Sender<Result<(), ChatConnectError>>>,
@@ -175,25 +208,6 @@ impl<R> SocketMessagesReader<R>
             _ = self.cancellation_token.cancelled() => {
                 Ok(Continuation::Stop)
             }
-             /* FIXME: Sleep task (more than 20s) cannot be executed for some reason.
-                    Fix and set 'self.ping.interval' as duration */
-            _ = time::sleep(Duration::from_secs(10)) => {
-                println!("-------------Ping sent at {}-------------", Local::now());
-                self.ping.iteration += 1;
-
-                // Are we missing 2 pongs?
-                if (self.ping.iteration - self.ping.acknowledged) > 2 {
-                    return Err(ChatMessageStreamError::PingTimeout);
-                }
-
-                let msg = ChatSocketMessage::Ping { nonce: self.ping.iteration.to_string() };
-                trace!(?msg, "sending ping");
-
-                match self.socket_messages_sender.send(msg).await {
-                    Ok(_) => Ok(Continuation::Continue),
-                    Err(_) => Ok(Continuation::Stop),
-                }
-            }
             Some(msg) = self.reader.next() => {
                 self.handle_message(msg?).await
             }
@@ -227,8 +241,9 @@ impl<R> SocketMessagesReader<R>
         }
     }
 
+
     async fn handle_socket_message(&mut self, msg: ChatSocketMessage) -> Continuation {
-        debug!(?msg, "Incoming chat socket message");
+        debug!( ? msg, "Incoming chat socket message");
         match msg {
             ChatSocketMessage::Response { nonce } => {
                 if self.auth.0 == nonce {
@@ -242,11 +257,11 @@ impl<R> SocketMessagesReader<R>
                 let iteration: u64 = match nonce.parse() {
                     Ok(v) => v,
                     Err(err) => {
-                        warn!(?err, "Failed to parse pong nonce as u64, ignoring...");
+                        warn!( ? err, "Failed to parse pong nonce as u64, ignoring...");
                         return Continuation::Continue;
                     }
                 };
-                debug!(?iteration, "Received pong");
+                debug!( ?iteration, "Received pong");
                 // Ignore potentially delayed responses from any old pings
                 if iteration > self.ping.acknowledged {
                     self.ping.acknowledged = iteration;

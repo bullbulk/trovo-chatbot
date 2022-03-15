@@ -50,15 +50,13 @@ fn handle_oauth_request(mut stream: TcpStream) -> Result<String, Box<dyn Error>>
 
     stream.read(&mut buffer).unwrap();
 
-    // This section need for HTTP request parsing
     let mut headers = [httparse::EMPTY_HEADER; 64];
     let mut req = httparse::Request::new(&mut headers);
 
-    let res = req.parse(&buffer).unwrap();
+    req.parse(&buffer).unwrap();
 
     let code: String;
 
-    // We don't need complete response
     match req.path {
         Some(path) => {
             let uri = path.parse::<Uri>().unwrap();

@@ -142,6 +142,7 @@ impl API {
 
         self.process_request::<MessageResponse>(request).await
     }
+
     pub async fn command(
         &mut self, command: String, channel_id: i32,
     ) -> Result<CommandResponse, Box<dyn Error>> {
@@ -165,9 +166,6 @@ impl API {
                 "https://open-api.trovo.live/openplatform/chat/channel-token/{}",
                 channel_id
             ));
-        println!("{}", format!(
-            "https://open-api.trovo.live/openplatform/chat/channel-token/{}",
-            channel_id));
 
         self.process_request::<ChatTokenResponse>(request).await
     }
@@ -181,6 +179,7 @@ impl API {
         let messages = ChatMessageStream::connect(
             token.token.clone()
         ).await?;
+        println!("Connected to chat");
         Ok(messages)
     }
 }
