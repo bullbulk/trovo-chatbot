@@ -1,12 +1,11 @@
-use std::{env};
+use std::collections::BTreeMap;
+use std::env;
 use std::path::Path;
-use std::collections::{BTreeMap};
 
 use envfile::EnvFile;
-use serde::{Deserialize};
-
 use lazy_static::lazy_static;
-
+use reqwest::header::{HeaderMap, HeaderValue};
+use serde::Deserialize;
 
 // All available scopes
 pub const SCOPES: [&str; 7] = [
@@ -26,6 +25,25 @@ lazy_static! {
         Config::load_env();
         Config::get_config()
     };
+    pub static ref HEADERS: HeaderMap = {
+        let mut m = HeaderMap::new();
+        m.insert("Accept", HeaderValue::from_str("application/json").unwrap());
+        m.insert("Content-Type", HeaderValue::from_str("application/json").unwrap());
+        m.insert("client-id", HeaderValue::from_str(&CONFIG.client_id.as_str()).unwrap());
+        m
+    };
+}
+
+pub fn headers() -> HeaderMap {
+    HEADERS.to_owned()
+}
+
+pub fn authorized_headers(access_token: String) -> HeaderMap {
+    let mut m = headers();
+    m.insert("Authorization", HeaderValue::from_str(
+        format!("OAuth {}", access_token).as_str()
+    ).unwrap());
+    m
 }
 
 #[derive(Deserialize, Debug)]

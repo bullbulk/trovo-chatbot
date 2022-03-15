@@ -6,13 +6,20 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-tungstenite = { version = "0.17.1", features = ["tokio-runtime", "tokio-rustls-webpki-roots"] }
+chrono = "0.4.19"
 envfile = "0.2.1"
 envy = "0.4.2"
+futures = "0.3.21"
 http = "0.2.6"
 httparse = "1.6.0"
+kv = "0.23.1"
 lazy_static = "1.4.0"
-reqwest = { version = "0.11.0", features = ["json"] }
+reqwest = { version = "0.11.0", features = ["json", "rustls-tls"] }
 portpicker = "0.1.1"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.79"
+serde_repr = "0.1.7"
 tokio = { version = "1", features = ["full"] }
-unqlite = "1.5.0"
+tokio-util = "0.7.0"
+tracing = "0.1.32"

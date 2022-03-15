@@ -2,47 +2,38 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::str;
 
-use lazy_static::lazy_static;
-use reqwest;
-use reqwest::header::{HeaderMap, HeaderValue};
 use portpicker::{pick_unused_port, Port};
+use reqwest;
 use reqwest::{RequestBuilder, Response};
 
+use crate::auth::server;
 use crate::auth::structs::RefreshResponse;
-use crate::auth::{db, server};
-use crate::utils::config::{CONFIG, SCOPES};
-
-
-lazy_static! {
-    pub static ref HEADERS: HeaderMap = {
-        let mut m = HeaderMap::new();
-        m.insert("Accept", HeaderValue::from_str("application/json").unwrap());
-        m.insert("Content-Type", HeaderValue::from_str("application/json").unwrap());
-        m.insert("client-id", HeaderValue::from_str(&CONFIG.client_id.as_str()).unwrap());
-        m
-    };
-}
-
+use crate::utils::config::{CONFIG, headers, SCOPES};
+use crate::utils::db;
 
 pub async fn update_tokens(client: reqwest::Client) -> RefreshResponse {
-    let token = db::read("refresh_token");
+    let token = db::read("refresh_token".to_string());
 
     let tokens = {
-        if token.is_empty() {
-            println!("Refresh token not found");
-            run_oauth().await.unwrap()
-        } else {
-            println!("Refreshing tokens");
-            let token = str::from_utf8(&*token).unwrap();
-            refresh_tokens(client, token).await.unwrap()
+        match token {
+            Some(v) => {
+                println!("Refreshing tokens");
+                refresh_tokens(client, v).await.unwrap()
+            }
+            None => {
+                println!("Refresh token not found");
+                run_oauth().await.unwrap()
+            }
         }
     };
-    db::write("refresh_token", &tokens.refresh_token);
+    db::write("refresh_token".to_string(), tokens.refresh_token.to_string());
 
     return tokens;
 }
 
-pub async fn exchange_token(client: reqwest::Client, auth_code: &str, redirect_uri: String) -> Result<RefreshResponse, Box<dyn Error>> {
+pub async fn exchange_token(
+    client: reqwest::Client, auth_code: &str, redirect_uri: String,
+) -> Result<RefreshResponse, Box<dyn Error>> {
     let body = {
         let mut m = HashMap::new();
         m.insert("client_secret", CONFIG.client_secret.as_str());
@@ -54,7 +45,7 @@ pub async fn exchange_token(client: reqwest::Client, auth_code: &str, redirect_u
 
     let request = client
         .post("https://open-api.trovo.live/openplatform/exchangetoken")
-        .headers(HEADERS.to_owned())
+        .headers(headers())
         .json(&body);
 
     let response = request.send().await?;
@@ -69,26 +60,26 @@ pub async fn exchange_token(client: reqwest::Client, auth_code: &str, redirect_u
 }
 
 async fn refresh_tokens(
-    client: reqwest::Client, token: &str,
+    client: reqwest::Client, token: String,
 ) -> Result<RefreshResponse, Box<dyn Error>> {
     let body: HashMap<&str, &str> = {
         let mut m: HashMap<&str, &str> = HashMap::new();
         m.insert("client_secret", CONFIG.client_secret.as_str());
         m.insert("grant_type", "refresh_token");
-        m.insert("refresh_token", token);
+        m.insert("refresh_token", token.as_str());
         m
     };
 
     let request: RequestBuilder = client
         .post("https://open-api.trovo.live/openplatform/refreshtoken")
-        .headers(HEADERS.to_owned())
+        .headers(headers())
         .json(&body);
 
     let response: Response = request.send().await?;
 
     return match response.status() {
         reqwest::StatusCode::OK => {
-            let payload: RefreshResponse = response.json::<RefreshResponse>().await?;
+            let payload = response.json::<RefreshResponse>().await?;
             Ok(payload)
         }
         _ => Err(format!("Caught an invalid response: {:?}", response))?
@@ -97,7 +88,6 @@ async fn refresh_tokens(
 
 pub async fn run_oauth() -> Result<RefreshResponse, Box<dyn Error>> {
     let port: Port = pick_unused_port().unwrap();
-
 
     // User must open this link and login to account of bot
     let redirect_uri: String = format!("http://localhost:{}", port);

@@ -8,7 +8,6 @@ use std::time::Duration;
 use http::Uri;
 use httparse;
 
-
 pub fn oauth_server(port: u16) -> String {
     // Bind free port from range [15000, 25000]
     let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).unwrap();
