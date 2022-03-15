@@ -59,20 +59,16 @@ fn handle_oauth_request(mut stream: TcpStream) -> Result<String, Box<dyn Error>>
     let code: String;
 
     // We don't need complete response
-    if res.is_partial() {
-        match req.path {
-            Some(path) => {
-                let uri = path.parse::<Uri>().unwrap();
-                let query = uri.query().unwrap();
-                let params = vec_to_hashmap(get_params(query));
-                code = params["code"].clone();
-            }
-            None => {
-                panic!("Empty path");
-            }
+    match req.path {
+        Some(path) => {
+            let uri = path.parse::<Uri>().unwrap();
+            let query = uri.query().unwrap();
+            let params = vec_to_hashmap(get_params(query));
+            code = params["code"].clone();
         }
-    } else {
-        panic!("Incorrect request {:?}", res)
+        None => {
+            panic!("Empty path");
+        }
     }
 
     let response = format!(
