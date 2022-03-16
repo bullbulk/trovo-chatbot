@@ -2,13 +2,17 @@ use chrono::{Local, Utc};
 use futures::StreamExt;
 
 use trovo_chatbot::api::client::API;
-use trovo_chatbot::utils::config::CONFIG;
+use trovo_chatbot::utils::config::SETTINGS;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut api = API::new().await;
-    let user = api.get_users(vec![CONFIG.target_channel_username.clone()]).await?;
-    let target_channel_id = user.users.get(0).unwrap().channel_id;
+
+    let users = api.get_users(
+        vec![SETTINGS.target_channel_name.clone()]
+    ).await?;
+    let target_user = users.users.get(0).unwrap();
+    let target_channel_id = target_user.channel_id;
     let bot_user = api.get_user_info().await?;  // me
 
     let mut messages = api.chat_messages_for_channel(target_channel_id).await?;
@@ -35,8 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
         }
-        println!("[{}] {{{}}} {}", Local::now(), msg.nick_name, msg.content);
-        api.send(msg.content, target_channel_id).await?;
+        println!("[{}] {{{}}} {}", Local::now().time(), msg.nick_name, msg.content);
     }
     Ok(())
 }

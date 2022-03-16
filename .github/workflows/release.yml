@@ -15,7 +15,7 @@ jobs:
           - target: x86_64-pc-windows-gnu
             archive: zip
           - target: x86_64-unknown-linux-musl
-            archive: tar.gz tar.xz
+            archive: tar.gz
     steps:
       - uses: actions/checkout@master
       - name: Compile and release
@@ -24,5 +24,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUSTTARGET: ${{ matrix.target }}
           ARCHIVE_TYPES: ${{ matrix.archive }}
-          EXTRA_FILES: ".env.example LICENSE.md"
+          EXTRA_FILES: "settings.json.example LICENSE.md"
 

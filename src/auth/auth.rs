@@ -8,11 +8,11 @@ use reqwest::{RequestBuilder, Response};
 
 use crate::auth::server;
 use crate::auth::structs::RefreshResponse;
-use crate::utils::config::{CONFIG, headers, SCOPES};
+use crate::utils::config::{headers, SCOPES, SETTINGS};
 use crate::utils::db;
 
 pub async fn update_tokens(client: reqwest::Client) -> RefreshResponse {
-    let token = db::read("refresh_token".to_string());
+    let token = db::read("config", "refresh_token".to_string());
 
     let tokens = {
         match token {
@@ -28,7 +28,7 @@ pub async fn update_tokens(client: reqwest::Client) -> RefreshResponse {
             }
         }
     };
-    db::write("refresh_token".to_string(), tokens.refresh_token.to_string());
+    db::write("config", "refresh_token".to_string(), tokens.refresh_token.to_string());
 
     return tokens;
 }
@@ -38,7 +38,7 @@ pub async fn exchange_token(
 ) -> Result<RefreshResponse, Box<dyn Error>> {
     let body = {
         let mut m = HashMap::new();
-        m.insert("client_secret", CONFIG.client_secret.as_str());
+        m.insert("client_secret", SETTINGS.client_secret.as_str());
         m.insert("grant_type", "authorization_code");
         m.insert("code", auth_code);
         m.insert("redirect_uri", redirect_uri.as_str());
@@ -66,7 +66,7 @@ async fn refresh_tokens(
 ) -> Result<RefreshResponse, Box<dyn Error>> {
     let body: HashMap<&str, &str> = {
         let mut m: HashMap<&str, &str> = HashMap::new();
-        m.insert("client_secret", CONFIG.client_secret.as_str());
+        m.insert("client_secret", SETTINGS.client_secret.as_str());
         m.insert("grant_type", "refresh_token");
         m.insert("refresh_token", token.as_str());
         m
@@ -95,7 +95,7 @@ pub async fn run_oauth() -> Result<RefreshResponse, Box<dyn Error>> {
     let redirect_uri: String = format!("http://localhost:{}", port);
     let auth_url: String = format!(
         "Go to link:\nhttps://open.trovo.live/page/login.html?client_id={}&response_type=code&scope={}&redirect_uri={}",
-        CONFIG.client_id, SCOPES.join("+"), redirect_uri
+        SETTINGS.client_id, SCOPES.join("+"), redirect_uri
     );
     println!("{}", auth_url);
 

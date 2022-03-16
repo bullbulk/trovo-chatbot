@@ -8,8 +8,7 @@ edition = "2021"
 [dependencies]
 async-tungstenite = { version = "0.17.1", features = ["tokio-runtime", "tokio-rustls-webpki-roots"] }
 chrono = "0.4.19"
-envfile = "0.2.1"
-envy = "0.4.2"
+config = "0.12.0"
 futures = "0.3.21"
 http = "0.2.6"
 httparse = "1.6.0"
@@ -22,6 +21,4 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.79"
 serde_repr = "0.1.7"
 tokio = { version = "1", features = ["full"] }
-tokio-cron-scheduler = "0.5.0"
 tokio-util = "0.7.0"
-tracing = "0.1.32"

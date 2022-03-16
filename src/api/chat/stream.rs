@@ -13,7 +13,6 @@ use tokio::{
     time::sleep,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, trace, warn};
 
 use crate::api::chat::errors::ChatConnectError;
 use crate::api::chat::errors::ChatMessageStreamError;
@@ -158,7 +157,6 @@ impl Pinger {
                 self.ping.iteration += 1;
 
                 let msg = ChatSocketMessage::Ping { nonce: self.ping.iteration.to_string() };
-                trace!(?msg, "sending ping");
                 match self.socket_messages_sender.send(msg).await {
                     Err(_) => panic!("Service unavailable: cannot send ping"),
                     _ => {}
@@ -189,11 +187,9 @@ impl<R> SocketMessagesReader<R>
             loop {
                 match self.next().await {
                     Ok(Continuation::Stop) => {
-                        trace!("Socket reader exited gracefully");
                         break;
                     }
                     Err(err) => {
-                        error!(?err, "Socket reader error");
                         self.chat_messages_sender.send(Err(err)).await.ok();
                         break;
                     }
@@ -221,8 +217,6 @@ impl<R> SocketMessagesReader<R>
         &mut self,
         msg: Message,
     ) -> Result<Continuation, ChatMessageStreamError> {
-        trace!(?msg, "Incoming websocket message");
-
         match msg {
             Message::Text(text) => {
                 let msg: ChatSocketMessage = serde_json::from_str(&text)?;
@@ -243,7 +237,6 @@ impl<R> SocketMessagesReader<R>
 
 
     async fn handle_socket_message(&mut self, msg: ChatSocketMessage) -> Continuation {
-        debug!( ? msg, "Incoming chat socket message");
         match msg {
             ChatSocketMessage::Response { nonce } => {
                 if self.auth.0 == nonce {
@@ -256,12 +249,10 @@ impl<R> SocketMessagesReader<R>
             ChatSocketMessage::Pong { nonce, data } => {
                 let iteration: u64 = match nonce.parse() {
                     Ok(v) => v,
-                    Err(err) => {
-                        warn!( ? err, "Failed to parse pong nonce as u64, ignoring...");
+                    Err(_err) => {
                         return Continuation::Continue;
                     }
                 };
-                debug!( ?iteration, "Received pong");
                 // Ignore potentially delayed responses from any old pings
                 if iteration > self.ping.acknowledged {
                     self.ping.acknowledged = iteration;
@@ -308,11 +299,9 @@ impl<W> SocketMessagesWriter<W>
             loop {
                 match self.next().await {
                     Ok(Continuation::Stop) => {
-                        trace!("Socket writer exited gracefully");
                         break;
                     }
                     Err(err) => {
-                        error!(?err, "Socket writer error");
                         self.chat_messages_sender.send(Err(err)).await.ok();
                         break;
                     }
@@ -341,7 +330,6 @@ impl<W> SocketMessagesWriter<W>
         &mut self,
         msg: ChatSocketMessage,
     ) -> Result<(), ChatMessageStreamError> {
-        trace!(?msg, "Outgoing websocket message");
         let msg = serde_json::to_string(&msg)?;
         self.writer.send(msg.into()).await?;
         Ok(())

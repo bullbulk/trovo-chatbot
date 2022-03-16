@@ -1,11 +1,20 @@
-use std::collections::BTreeMap;
-use std::env;
-use std::path::Path;
-
-use envfile::EnvFile;
+use config::Config;
 use lazy_static::lazy_static;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Deserialize;
+
+lazy_static! {
+    pub static ref SETTINGS: Settings = get_settings();
+
+    pub static ref HEADERS: HeaderMap = {
+        let mut m = HeaderMap::new();
+        m.insert("Accept", HeaderValue::from_str("application/json").unwrap());
+        m.insert("Content-Type", HeaderValue::from_str("application/json").unwrap());
+        m.insert("client-id", HeaderValue::from_str(SETTINGS.client_id.as_str()).unwrap());
+        m
+    };
+}
+
 
 // All available scopes
 pub const SCOPES: [&str; 7] = [
@@ -19,19 +28,18 @@ pub const SCOPES: [&str; 7] = [
 ];
 
 
-// Global singleton
-lazy_static! {
-    pub static ref CONFIG: Config = {
-        Config::load_env();
-        Config::get_config()
-    };
-    pub static ref HEADERS: HeaderMap = {
-        let mut m = HeaderMap::new();
-        m.insert("Accept", HeaderValue::from_str("application/json").unwrap());
-        m.insert("Content-Type", HeaderValue::from_str("application/json").unwrap());
-        m.insert("client-id", HeaderValue::from_str(&CONFIG.client_id.as_str()).unwrap());
-        m
-    };
+#[derive(Deserialize, Debug, Clone)]
+pub struct Settings {
+    pub client_id: String,
+    pub client_secret: String,
+    pub target_channel_name: String,
+}
+
+fn get_settings() -> Settings {
+    Config::builder()
+        .add_source(config::File::with_name("settings.json"))
+        .build().unwrap()
+        .try_deserialize::<Settings>().unwrap()
 }
 
 pub fn headers() -> HeaderMap {
@@ -44,30 +52,4 @@ pub fn authorized_headers(access_token: String) -> HeaderMap {
         format!("OAuth {}", access_token).as_str()
     ).unwrap());
     m
-}
-
-#[derive(Deserialize, Debug)]
-pub struct Config {
-    pub client_id: String,
-    pub client_secret: String,
-    pub target_channel_username: String,
-}
-
-impl Config {
-    // Call once
-    pub fn load_env() -> () {
-        // .env in application root (next to executable)
-        let env_path = Path::new(".env");
-
-        // Load variables from file to environment
-        let env_store: BTreeMap<String, String> = EnvFile::new(env_path).unwrap().store;
-        for (key, value) in &env_store {
-            env::set_var(key, value);
-        };
-    }
-
-    pub fn get_config() -> Config {
-        // Load necessary environment variables to struct
-        return envy::from_env::<Config>().unwrap();
-    }
 }
