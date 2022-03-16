@@ -2,16 +2,16 @@ use std::{error::Error, fmt::Display};
 
 use async_tungstenite::tungstenite::{self, protocol::CloseFrame};
 
-/// Errors that can happen with authenticated requests
+// Errors that can happen with authenticated requests
 #[derive(Debug)]
 pub enum ChatConnectError {
-    /// Error connecting to socket
+    // Error connecting to socket
     WebSocket(tungstenite::Error),
 
-    /// Error serialising or deserialising entities
+    // Error serialising or deserialising entities
     Serde(serde_json::Error),
 
-    /// The websocket closed before we could connect
+    // The websocket closed before we could connect
     SocketClosed,
 }
 
@@ -47,19 +47,19 @@ impl Error for ChatConnectError {
     }
 }
 
-/// Errors that can happen with authenticated requests
+// Errors that can happen with authenticated requests
 #[derive(Debug)]
 pub enum ChatMessageStreamError {
-    /// Error connecting to socket
+    // Error connecting to socket
     WebSocket(tungstenite::Error),
 
-    /// Error serialising or deserialising entities
+    // Error serialising or deserialising entities
     Serde(serde_json::Error),
 
-    /// The socket was closed by the server
+    // The socket was closed by the server
     SocketClosed(Option<CloseFrame<'static>>),
 
-    /// The server never responsed to our pings
+    // The server never responsed to our pings
     PingTimeout,
 }
 

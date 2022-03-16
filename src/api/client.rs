@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::time::Duration;
 
 use reqwest;
 use reqwest::RequestBuilder;
 use serde::de::DeserializeOwned;
 
-use crate::api::stream::stream::ChatMessageStream;
-use crate::api::structs::{ChannelInfo, ChatTokenResponse, CommandResponse, EmptyError, InvalidResponse, MessageResponse, UsersResponse};
+use crate::api::chat::stream::ChatMessageStream;
+use crate::api::errors::{EmptyError, InvalidResponse};
+use crate::api::structs::{ChannelInfo, ChatTokenResponse, CommandResponse, DeleteResponse, MessageResponse, UserInfo, UsersResponse};
 use crate::auth::auth::update_tokens;
 use crate::utils::config::authorized_headers;
 
@@ -81,6 +83,13 @@ impl API {
         self.access_token = tokens.access_token;
     }
 
+    pub async fn get_user_info(&mut self) -> Result<UserInfo, Box<dyn Error>> {
+        let request = self.client
+            .get("https://open-api.trovo.live/openplatform/getuserinfo");
+
+        self.process_request::<UserInfo>(request).await
+    }
+
     pub async fn get_users(
         &mut self, nicknames: Vec<String>,
     ) -> Result<UsersResponse, Box<dyn Error>> {
@@ -143,18 +152,20 @@ impl API {
         self.process_request::<MessageResponse>(request).await
     }
 
-    pub async fn command(
-        &mut self, command: String, channel_id: i32,
-    ) -> Result<CommandResponse, Box<dyn Error>> {
-        let mut body = HashMap::new();
-        body.insert("command", command);
-        body.insert("channel_id", channel_id.to_string());
-
+    // FIXME: Doesn't work at all. Server returns 400 HTTP and 20000 API status
+    pub async fn delete(
+        &mut self, channel_id: i32, message_id: String, sender_id: i32,
+    ) -> Result<DeleteResponse, Box<dyn Error>> {
         let request = self.client
-            .post("https://open-api.trovo.live/openplatform/channels/command")
-            .json(&body);
+            .delete(
+                format!(
+                    "https://open-api.trovo.live/openplatform/channels/{}/messages/{}/users/{}",
+                    channel_id.to_string(),
+                    message_id,
+                    sender_id.to_string()
+                ));
 
-        self.process_request::<CommandResponse>(request).await
+        self.process_request::<DeleteResponse>(request).await
     }
 
     pub async fn chat_token(
@@ -181,5 +192,174 @@ impl API {
         ).await?;
         println!("Connected to chat");
         Ok(messages)
+    }
+
+    pub async fn command(
+        &mut self, command: String, channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let mut body = HashMap::new();
+        body.insert("command", command);
+        body.insert("channel_id", channel_id.to_string());
+
+        let request = self.client
+            .post("https://open-api.trovo.live/openplatform/channels/command")
+            .json(&body);
+
+        self.process_request::<CommandResponse>(request).await
+    }
+
+    // Display a list of moderator of this channel.
+    pub async fn mods(
+        &mut self, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("mods");
+        self.command(command, target_channel_id).await
+    }
+
+    // Display a list of banned users for this channel.
+    pub async fn banned(
+        &mut self, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("banned");
+        self.command(command, target_channel_id).await
+    }
+
+    // Duration is zero: Ban a user from chat permamently.
+    // Duration is not zero: Ban a user from chat for 'duration'.
+    pub async fn ban(
+        &mut self, username: String, duration: Duration, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command;
+        if duration.is_zero() {
+            command = format!("ban {}", username);
+        } else {
+            command = format!("ban {} {}s", username, duration.as_secs());
+        }
+        self.command(command, target_channel_id).await
+    }
+
+    // Remove ban on a user.
+    pub async fn unban(
+        &mut self, nickname: String, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("unban {}", nickname);
+        self.command(command, target_channel_id).await
+    }
+
+    // Grant moderator status to a user.
+    pub async fn mod_(&mut self, nickname: String, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("mod {}", nickname);
+        self.command(command, target_channel_id).await
+    }
+
+    // Revoke moderator status from a user.
+    pub async fn unmod(
+        &mut self, nickname: String, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("unmod {}", nickname);
+        self.command(command, target_channel_id).await
+    }
+
+    // Clear chat history for all viewers.
+    pub async fn clear(
+        &mut self, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("clear");
+        self.command(command, target_channel_id).await
+    }
+
+    // Limit how frequently users can send messages in chat.
+    pub async fn slow(
+        &mut self, duration: Duration, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("slow {}", duration.as_secs());
+        self.command(command, target_channel_id).await
+    }
+
+    // Turn off slow mode.
+    pub async fn slowoff(
+        &mut self, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("slowoff");
+        self.command(command, target_channel_id).await
+    }
+
+    // Duration is zero: Restrict chat to followers based on their follow duration.
+    // Duration is not zero: Restrict chat to followers only.
+    pub async fn followers(
+        &mut self, duration: Duration, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command;
+        if duration.is_zero() {
+            command = format!("followers");
+        } else {
+            command = format!("followers {}s", duration.as_secs());
+        }
+        self.command(command, target_channel_id).await
+    }
+
+    // Turn off followers-only mode.
+    pub async fn followersoff(
+        &mut self, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("followersoff");
+        self.command(command, target_channel_id).await
+    }
+
+    // Stop live and hosting other channels.
+    pub async fn host(
+        &mut self, username: String, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("host {}", username);
+        self.command(command, target_channel_id).await
+    }
+
+    // Stop hosting channels.
+    pub async fn unhost(
+        &mut self, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("unhost");
+        self.command(command, target_channel_id).await
+    }
+
+    // Set title of your channel.
+    pub async fn settitle(
+        &mut self, title: String, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("settitle {}", title);
+        self.command(command, target_channel_id).await
+    }
+
+    // Set category of your channel.
+    pub async fn setcategory(
+        &mut self, category_name: String, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("setcategory {}", category_name);
+        self.command(command, target_channel_id).await
+    }
+
+    // Grant to user a custom role.
+    pub async fn addrole(
+        &mut self, rolename: String, username: String, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("addrole {} {}", rolename, username);
+        self.command(command, target_channel_id).await
+    }
+
+    // Revoke from user a custom role.
+    pub async fn removerole(
+        &mut self, rolename: String, username: String, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("removerole {} {}", rolename, username);
+        self.command(command, target_channel_id).await
+    }
+
+    // Fast clip the past 90-seconds stream in one channel.
+    pub async fn fastclip(
+        &mut self, target_channel_id: i32,
+    ) -> Result<CommandResponse, Box<dyn Error>> {
+        let command = format!("fastclip");
+        self.command(command, target_channel_id).await
     }
 }

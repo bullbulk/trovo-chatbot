@@ -18,7 +18,9 @@ pub async fn update_tokens(client: reqwest::Client) -> RefreshResponse {
         match token {
             Some(v) => {
                 println!("Refreshing tokens");
-                refresh_tokens(client, v).await.unwrap()
+                let res = refresh_tokens(client, v).await.unwrap();
+                println!("Refreshed");
+                res
             }
             None => {
                 println!("Refresh token not found");

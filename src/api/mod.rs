@@ -1,3 +1,4 @@
 pub mod client;
 pub mod structs;
-pub mod stream;
+pub mod chat;
+pub mod errors;

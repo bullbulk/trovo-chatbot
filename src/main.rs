@@ -8,9 +8,10 @@ use trovo_chatbot::utils::config::CONFIG;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut api = API::new().await;
     let user = api.get_users(vec![CONFIG.target_channel_username.clone()]).await?;
-    let target_user_id = user.users.get(0).unwrap().clone().channel_id;
+    let target_channel_id = user.users.get(0).unwrap().channel_id;
+    let bot_user = api.get_user_info().await?;  // me
 
-    let mut messages = api.chat_messages_for_channel(target_user_id).await?;
+    let mut messages = api.chat_messages_for_channel(target_channel_id).await?;
 
     let start_time = Utc::now().timestamp();
     let mut skipped_messages = 0;
@@ -18,6 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     while let Some(msg) = messages.next().await {
         let msg = msg?;
+        // Trovo API returns messages which sent before program start too, ignore them
         if !already_skipped {
             if start_time > msg.send_time {
                 skipped_messages += 1;
@@ -27,7 +29,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Skipped {} messages", skipped_messages);
             }
         };
+        // Ignore messages sent by me
+        if msg.sender_id != None {
+            if msg.sender_id.unwrap() == bot_user.channel_id {
+                continue;
+            }
+        }
         println!("[{}] {{{}}} {}", Local::now(), msg.nick_name, msg.content);
+        api.send(msg.content, target_channel_id).await?;
     }
     Ok(())
 }

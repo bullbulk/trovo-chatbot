@@ -115,7 +115,7 @@ pub struct ChatMessage {
     pub message_id: String,
 
     // User ID of the sender. Maybe be `None` for `Event` message types, possibly others
-    pub sender_id: Option<i64>,
+    pub sender_id: Option<i32>,
 
     // Send time of the message.
     pub send_time: i64,

@@ -15,15 +15,15 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, trace, warn};
 
-use crate::api::stream::errors::ChatConnectError;
-use crate::api::stream::errors::ChatMessageStreamError;
-use crate::api::stream::structs::{ChatMessage, ChatSocketMessage};
+use crate::api::chat::errors::ChatConnectError;
+use crate::api::chat::errors::ChatMessageStreamError;
+use crate::api::chat::structs::{ChatMessage, ChatSocketMessage};
 use crate::utils::utils::random_string;
 
 const CHAT_MESSAGES_BUFFER: usize = 32;
 const DEFAULT_PING_INTERVAL: Duration = Duration::from_secs(30);
 
-// A stream of chat messages
+// A chat of chat messages
 #[derive(Debug)]
 pub struct ChatMessageStream {
     cancellation_token: CancellationToken,
